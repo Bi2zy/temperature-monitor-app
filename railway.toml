@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "streamlit run src/app.py --server.port=$PORT"
+
+[[services]]
+name = "web"
+[[services.ports]]
+port = 8080
