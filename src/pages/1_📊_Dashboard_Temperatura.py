@@ -24,7 +24,7 @@ def get_supabase_credentials():
         try:
             supabase_url = st.secrets.get("SUPABASE_URL")
             supabase_key = st.secrets.get("SUPABASE_KEY")
-        except:
+        except Exception:
             pass  # Ignorar error si no hay secrets
 
     return supabase_url, supabase_key
@@ -41,7 +41,6 @@ def main():
     if not supabase_url or not supabase_key:
         st.error("""
         ❌ No se encontraron las credenciales de Supabase.
-        
         **Configura en Railway:**
         - SUPABASE_URL = https://vhycvnxspssqbwriyewb.supabase.co
         - SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -184,7 +183,7 @@ def display_charts(df, days_back):
             fig_heatmap = px.imshow(
                 heatmap_data,
                 title="Temperatura Promedio por Ubicación y Hora",
-                labels=dict(x="Hora del Día", y="Ubicación", color="Temperatura (°C)"),
+                labels={"x": "Hora", "y": "Ubicación", "color": "Temp. (°C)"},
             )
             st.plotly_chart(fig_heatmap, use_container_width=True)
 

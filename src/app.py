@@ -34,7 +34,7 @@ def simulate_temperature_data(supabase, num_readings=5):
         ]
         sensors = ["sensor_001", "sensor_002", "sensor_003", "sensor_004"]
 
-        for i in range(num_readings):
+        for _ in range(num_readings):
             reading = {
                 "sensor_id": random.choice(sensors),
                 "location": random.choice(locations),
@@ -138,8 +138,8 @@ def show_real_data_interface(supabase):
 
         else:
             st.warning(
-                "No hay datos en Supabase. Usa el simulador para agregar datos de prueba."
-            )
+    "No hay datos en Supabase. Usa el simulador para agregar datos de prueba."
+)
             show_demo_interface()
 
     except Exception as e:

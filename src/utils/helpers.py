@@ -60,7 +60,7 @@ def format_timestamp(timestamp: str) -> str:
     try:
         dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         return dt.strftime("%d/%m/%Y %H:%M:%S")
-    except:
+    except Exception:
         return timestamp
 
 
