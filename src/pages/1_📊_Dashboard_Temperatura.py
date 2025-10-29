@@ -11,21 +11,20 @@ from datetime import datetime, timedelta
 from utils.database import SupabaseClient
 
 def get_supabase_credentials():
-    """Obtener credenciales de manera segura"""
-    try:
-        # Opción 1: Desde secrets de Streamlit
-        supabase_url = st.secrets.get("SUPABASE_URL")
-        supabase_key = st.secrets.get("SUPABASE_KEY")
-        
-        # Opción 2: Desde variables de entorno
-        if not supabase_url or not supabase_key:
-            supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_KEY")
-        
-        return supabase_url, supabase_key
-    except Exception as e:
-        st.error(f"Error obteniendo credenciales: {e}")
-        return None, None
+    """Obtener credenciales de manera segura - VERSIÓN CORREGIDA"""
+    # PRIMERO: Variables de entorno (funciona en Railway)
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    # SEGUNDO: Secrets de Streamlit (funciona localmente)
+    if not supabase_url or not supabase_key:
+        try:
+            supabase_url = st.secrets.get("SUPABASE_URL")
+            supabase_key = st.secrets.get("SUPABASE_KEY")
+        except:
+            pass  # Ignorar error si no hay secrets
+    
+    return supabase_url, supabase_key
 
 def main():
     """Dashboard principal de temperatura"""
@@ -49,7 +48,7 @@ def main():
         return
     
     try:
-        # Inicializar cliente de Supabase CON STRINGS
+        # Inicializar cliente de Supabase
         supabase = SupabaseClient(supabase_url, supabase_key)
         
         # Filtros de fecha
@@ -65,6 +64,7 @@ def main():
         
         if not readings:
             st.warning("No hay datos de temperatura para el período seleccionado")
+            show_sample_data()
             return
         
         df = pd.DataFrame(readings)
@@ -85,6 +85,7 @@ def main():
         st.info("Mostrando datos de ejemplo...")
         show_sample_data()
 
+# [El resto del código se mantiene igual...]
 def display_metrics(df):
     """Mostrar métricas principales"""
     st.subheader("📈 Métricas Principales")
