@@ -1,206 +1,150 @@
 """
-Sistema de Monitoreo de Temperatura en Tiempo Real
-Módulo: Lectura y visualización de datos térmicos
+Sistema de Monitoreo de Temperatura - Versión Corregida para Railway
 """
 import streamlit as st
 import os
+import pandas as pd
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from utils.database import SupabaseClient
-from utils.helpers import validate_temperature, celsius_to_fahrenheit, format_timestamp
 
 # Configuración de la página
 st.set_page_config(
     page_title="Sistema de Monitoreo de Temperatura",
     page_icon="🌡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Cargar variables de entorno
-load_dotenv()
-
-class TemperatureMonitorApp:
-    """Clase principal de la aplicación de monitoreo de temperatura"""
+def get_supabase_config():
+    """
+    Obtener configuración de Supabase - Versión Railway
+    """
+    # EN RAILWAY: Las variables de entorno están en os.environ, NO en st.secrets
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
     
-    def __init__(self):
-        """Inicializar la aplicación y conexión a Supabase"""
-        self.supabase = self._init_supabase()
-        self.sensor_locations = ["Sala Principal", "Cocina", "Dormitorio", "Exterior", "Laboratorio"]
-    
-    def _init_supabase(self):
-        """Inicializar cliente de Supabase"""
-        try:
-            supabase_url = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL"))
-            supabase_key = st.secrets.get("SUPABASE_KEY", os.getenv("SUPABASE_KEY"))
-            
-            if not supabase_url or not supabase_key:
-                st.error("❌ Configura las variables de entorno SUPABASE_URL y SUPABASE_KEY")
-                st.stop()
-            
-            return SupabaseClient(supabase_url, supabase_key)
-        except Exception as e:
-            st.error(f"Error conectando a Supabase: {e}")
-            st.stop()
-    
-    def sidebar_controls(self):
-        """Controles de la barra lateral para configuración"""
-        st.sidebar.title("🌡️ Controles de Sensor")
-        
-        with st.sidebar.form("temperature_form"):
-            st.subheader("Registrar Nueva Lectura")
-            
-            location = st.selectbox("📍 Ubicación del Sensor", self.sensor_locations)
-            temperature = st.number_input(
-                "🌡️ Temperatura (°C)", 
-                min_value=-50.0, 
-                max_value=100.0, 
-                value=25.0,
-                step=0.1
-            )
-            humidity = st.slider("💧 Humedad Relativa (%)", 0, 100, 50)
-            sensor_id = st.text_input("🔧 ID del Sensor", value="sensor_001")
-            
-            submitted = st.form_submit_button("📊 Registrar Lectura")
-            
-            if submitted:
-                if validate_temperature(temperature):
-                    new_reading = {
-                        "sensor_id": sensor_id,
-                        "location": location,
-                        "temperature_c": temperature,
-                        "humidity": humidity,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    
-                    result = self.supabase.insert_temperature_reading(new_reading)
-                    if result:
-                        st.sidebar.success("✅ Lectura registrada exitosamente!")
-                    else:
-                        st.sidebar.error("❌ Error al registrar lectura")
-                else:
-                    st.sidebar.error("⚠️ Temperatura fuera de rango válido")
-        
-        # Conversor de temperatura
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔄 Conversor de Temperatura")
-        temp_c = st.sidebar.number_input("Temperatura en °C", value=25.0)
-        temp_f = celsius_to_fahrenheit(temp_c)
-        st.sidebar.metric("Temperatura en °F", f"{temp_f:.1f}")
-    
-    def main_dashboard(self):
-        """Dashboard principal de monitoreo"""
-        st.title("🌡️ Sistema de Monitoreo de Temperatura")
-        st.markdown("---")
-        
-        # Obtener lecturas recientes
-        recent_readings = self.supabase.get_recent_temperature_readings(limit=10)
-        
-        # Métricas en tiempo real
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            if recent_readings:
-                current_temp = recent_readings[0]['temperature_c']
-                st.metric(
-                    "🌡️ Temperatura Actual", 
-                    f"{current_temp:.1f}°C",
-                    delta=f"{celsius_to_fahrenheit(current_temp):.1f}°F"
-                )
-        
-        with col2:
-            if recent_readings:
-                current_humidity = recent_readings[0]['humidity']
-                st.metric("💧 Humedad Actual", f"{current_humidity}%")
-        
-        with col3:
-            total_readings = len(recent_readings)
-            st.metric("📊 Total de Lecturas", total_readings)
-        
-        with col4:
-            if recent_readings:
-                avg_temp = sum(r['temperature_c'] for r in recent_readings) / len(recent_readings)
-                st.metric("📈 Promedio", f"{avg_temp:.1f}°C")
-        
-        st.markdown("---")
-        
-        # Mostrar lecturas recientes
-        st.subheader("📋 Lecturas Recientes")
-        
-        if recent_readings:
-            for reading in recent_readings:
-                self._display_reading_card(reading)
-        else:
-            st.info("📝 No hay lecturas registradas. Usa el formulario de la barra lateral para agregar datos.")
-    
-    def _display_reading_card(self, reading):
-        """Mostrar tarjeta individual de lectura"""
-        with st.container():
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-            
-            with col1:
-                # Indicador de temperatura con color
-                temp = reading['temperature_c']
-                if temp < 10:
-                    temp_icon = "❄️"
-                    color = "#87CEEB"
-                elif temp > 30:
-                    temp_icon = "🔥"
-                    color = "#FF6B6B"
-                else:
-                    temp_icon = "🌡️"
-                    color = "#4ECDC4"
-                
-                st.markdown(
-                    f"<h3 style='color: {color};'>{temp_icon} {reading['location']}</h3>",
-                    unsafe_allow_html=True
-                )
-                st.caption(f"Sensor: {reading['sensor_id']}")
-            
-            with col2:
-                st.metric("Temperatura", f"{temp:.1f}°C")
-            
-            with col3:
-                st.metric("Humedad", f"{reading['humidity']}%")
-            
-            with col4:
-                st.caption(f"🕒 {format_timestamp(reading['timestamp'])}")
-            
-            st.markdown("---")
-    
-    def alert_system(self):
-        """Sistema de alertas de temperatura"""
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🚨 Sistema de Alertas")
-        
-        # Configuración de umbrales
-        min_temp = st.sidebar.number_input("Temperatura Mínima (°C)", value=10.0)
-        max_temp = st.sidebar.number_input("Temperatura Máxima (°C)", value=35.0)
-        
-        # Verificar alertas
-        recent_readings = self.supabase.get_recent_temperature_readings(limit=5)
-        if recent_readings:
-            current_temp = recent_readings[0]['temperature_c']
-            
-            if current_temp < min_temp:
-                st.sidebar.error(f"🚨 ALERTA: Temperatura baja ({current_temp}°C)")
-            elif current_temp > max_temp:
-                st.sidebar.error(f"🚨 ALERTA: Temperatura alta ({current_temp}°C)")
-            else:
-                st.sidebar.success("✅ Temperatura dentro de rangos normales")
+    return supabase_url, supabase_key
 
 def main():
-    """Función principal de la aplicación"""
-    app = TemperatureMonitorApp()
+    st.title("🌡️ Sistema de Monitoreo de Temperatura")
+    st.markdown("---")
     
-    # Barra lateral con controles
-    app.sidebar_controls()
+    # Verificar configuración
+    supabase_url, supabase_key = get_supabase_config()
     
-    # Sistema de alertas
-    app.alert_system()
+    # Debug: Mostrar qué está pasando
+    st.sidebar.subheader("🔍 Debug Info")
+    st.sidebar.write(f"SUPABASE_URL: {'✅ Configurada' if supabase_url else '❌ No configurada'}")
+    st.sidebar.write(f"SUPABASE_KEY: {'✅ Configurada' if supabase_key else '❌ No configurada'}")
     
-    # Dashboard principal
-    app.main_dashboard()
+    if not supabase_url or not supabase_key:
+        st.error("""
+        🔧 **Configuración Requerida en Railway**
+        
+        Las variables de entorno NO se están detectando. Verifica:
+        
+        1. **En Railway → Variables** asegúrate de tener:
+           - `SUPABASE_URL = https://vhycvnxspssqbwriyewb.supabase.co`
+           - `SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+        
+        2. **Reinicia el deploy** después de agregar las variables
+        
+        3. **Verifica que no haya espacios** extras en los valores
+        """)
+        
+        # Mostrar valores actuales (sin revelar la key completa)
+        if supabase_url:
+            st.info(f"URL detectada: {supabase_url[:20]}...")
+        if supabase_key:
+            st.info(f"KEY detectada: {supabase_key[:20]}...")
+        
+        show_demo_interface()
+        return
+    
+    # Si tenemos credenciales, intentar conectar
+    try:
+        from utils.database import SupabaseClient
+        supabase = SupabaseClient(supabase_url, supabase_key)
+        st.success("✅ Conectado a Supabase correctamente!")
+        
+        # Aquí iría la lógica normal con Supabase
+        show_real_data_interface(supabase)
+        
+    except Exception as e:
+        st.error(f"❌ Error conectando con Supabase: {str(e)}")
+        st.info("Mostrando datos de ejemplo mientras se soluciona la conexión...")
+        show_demo_interface()
+
+def show_real_data_interface(supabase):
+    """Interfaz cuando hay conexión real a Supabase"""
+    st.success("🎉 **CONEXIÓN EXITOSA CON SUPABASE**")
+    
+    # Obtener datos reales
+    try:
+        readings = supabase.get_temperature_readings_by_days(7)
+        
+        if readings:
+            df = pd.DataFrame(readings)
+            st.metric("📊 Datos Reales", f"{len(df)} lecturas")
+            
+            # Mostrar algunos datos
+            st.subheader("📋 Últimas Lecturas Reales")
+            st.dataframe(df.head()[['timestamp', 'location', 'temperature_c', 'humidity']])
+        else:
+            st.warning("No hay datos en Supabase. Agrega algunos datos desde la aplicación.")
+            show_demo_interface()
+            
+    except Exception as e:
+        st.error(f"Error obteniendo datos: {e}")
+        show_demo_interface()
+
+def show_demo_interface():
+    """Mostrar interfaz de demostración"""
+    st.warning("📊 Modo Demostración - Usando datos de ejemplo")
+    
+    # Datos de ejemplo
+    dates = [datetime.now() - timedelta(hours=i) for i in range(24)]
+    sample_data = {
+        'timestamp': dates,
+        'location': ['Sala Principal', 'Cocina', 'Dormitorio'] * 8,
+        'temperature_c': [22 + (i % 3) * 0.5 for i in range(24)],
+        'humidity': [45 + (i % 15) for i in range(24)],
+        'sensor_id': ['sensor_001', 'sensor_002', 'sensor_003'] * 8
+    }
+    
+    df = pd.DataFrame(sample_data)
+    
+    # Métricas
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🌡️ Temperatura Actual", "23.5°C", "0.5°C")
+    with col2:
+        st.metric("💧 Humedad", "47%", "-2%")
+    with col3:
+        st.metric("📍 Ubicaciones", "3 sensores")
+    
+    # Gráficos
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📈 Temperatura por Ubicación")
+        chart_data = df.groupby('location')['temperature_c'].mean()
+        st.bar_chart(chart_data)
+    
+    with col2:
+        st.subheader("📊 Evolución Temporal")
+        st.line_chart(df.set_index('timestamp')['temperature_c'])
+    
+    # Formulario de ejemplo
+    st.subheader("➕ Agregar Nueva Lectura (Demo)")
+    with st.form("demo_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            location = st.selectbox("Ubicación", ["Sala Principal", "Cocina", "Dormitorio"])
+            temp = st.slider("Temperatura (°C)", 15.0, 35.0, 23.0)
+        with col2:
+            humidity = st.slider("Humedad (%)", 30, 80, 50)
+            
+        if st.form_submit_button("📊 Simular Lectura"):
+            st.success(f"✅ Lectura simulada: {temp}°C en {location}")
 
 if __name__ == "__main__":
     main()
