@@ -1,9 +1,10 @@
 """
-Sistema de Monitoreo de Temperatura - Versión Corregida para Railway
+Sistema de Monitoreo de Temperatura - Con Simulador
 """
 import streamlit as st
 import os
 import pandas as pd
+import random
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -15,14 +16,32 @@ st.set_page_config(
 )
 
 def get_supabase_config():
-    """
-    Obtener configuración de Supabase - Versión Railway
-    """
-    # EN RAILWAY: Las variables de entorno están en os.environ, NO en st.secrets
+    """Obtener configuración de Supabase"""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
-    
     return supabase_url, supabase_key
+
+def simulate_temperature_data(supabase, num_readings=5):
+    """Simular datos de temperatura"""
+    try:
+        locations = ["Sala Principal", "Cocina", "Dormitorio", "Exterior", "Laboratorio"]
+        sensors = ["sensor_001", "sensor_002", "sensor_003", "sensor_004"]
+        
+        for i in range(num_readings):
+            reading = {
+                "sensor_id": random.choice(sensors),
+                "location": random.choice(locations),
+                "temperature_c": round(random.uniform(18.0, 32.0), 1),
+                "humidity": random.randint(35, 85),
+                "timestamp": (datetime.now() - timedelta(hours=random.randint(0, 24))).isoformat()
+            }
+            
+            supabase.insert_temperature_reading(reading)
+        
+        return True
+    except Exception as e:
+        st.error(f"Error simulando datos: {e}")
+        return False
 
 def main():
     st.title("🌡️ Sistema de Monitoreo de Temperatura")
@@ -31,52 +50,42 @@ def main():
     # Verificar configuración
     supabase_url, supabase_key = get_supabase_config()
     
-    # Debug: Mostrar qué está pasando
-    st.sidebar.subheader("🔍 Debug Info")
-    st.sidebar.write(f"SUPABASE_URL: {'✅ Configurada' if supabase_url else '❌ No configurada'}")
-    st.sidebar.write(f"SUPABASE_KEY: {'✅ Configurada' if supabase_key else '❌ No configurada'}")
-    
     if not supabase_url or not supabase_key:
-        st.error("""
-        🔧 **Configuración Requerida en Railway**
-        
-        Las variables de entorno NO se están detectando. Verifica:
-        
-        1. **En Railway → Variables** asegúrate de tener:
-           - `SUPABASE_URL = https://vhycvnxspssqbwriyewb.supabase.co`
-           - `SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-        
-        2. **Reinicia el deploy** después de agregar las variables
-        
-        3. **Verifica que no haya espacios** extras en los valores
-        """)
-        
-        # Mostrar valores actuales (sin revelar la key completa)
-        if supabase_url:
-            st.info(f"URL detectada: {supabase_url[:20]}...")
-        if supabase_key:
-            st.info(f"KEY detectada: {supabase_key[:20]}...")
-        
+        st.error("Configura las variables SUPABASE_URL y SUPABASE_KEY en Railway")
         show_demo_interface()
         return
     
-    # Si tenemos credenciales, intentar conectar
     try:
         from utils.database import SupabaseClient
         supabase = SupabaseClient(supabase_url, supabase_key)
         st.success("✅ Conectado a Supabase correctamente!")
         
-        # Aquí iría la lógica normal con Supabase
+        # SIMULADOR EN SIDEBAR
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🎮 Simulador de Datos")
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            if st.button("🌡️ +5 Lecturas"):
+                if simulate_temperature_data(supabase, 5):
+                    st.sidebar.success("✅ 5 lecturas agregadas!")
+                    st.rerun()
+        
+        with col2:
+            if st.button("📊 +10 Lecturas"):
+                if simulate_temperature_data(supabase, 10):
+                    st.sidebar.success("✅ 10 lecturas agregadas!")
+                    st.rerun()
+        
+        # Obtener y mostrar datos reales
         show_real_data_interface(supabase)
         
     except Exception as e:
-        st.error(f"❌ Error conectando con Supabase: {str(e)}")
-        st.info("Mostrando datos de ejemplo mientras se soluciona la conexión...")
+        st.error(f"Error conectando con Supabase: {e}")
         show_demo_interface()
 
 def show_real_data_interface(supabase):
-    """Interfaz cuando hay conexión real a Supabase"""
-    st.success("🎉 **CONEXIÓN EXITOSA CON SUPABASE**")
+    """Interfaz con datos reales de Supabase"""
     
     # Obtener datos reales
     try:
@@ -84,24 +93,45 @@ def show_real_data_interface(supabase):
         
         if readings:
             df = pd.DataFrame(readings)
-            st.metric("📊 Datos Reales", f"{len(df)} lecturas")
             
-            # Mostrar algunos datos
-            st.subheader("📋 Últimas Lecturas Reales")
-            st.dataframe(df.head()[['timestamp', 'location', 'temperature_c', 'humidity']])
+            # Métricas principales
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                total_readings = len(df)
+                st.metric("📊 Total Lecturas", total_readings)
+            
+            with col2:
+                avg_temp = df['temperature_c'].mean()
+                st.metric("🌡️ Promedio", f"{avg_temp:.1f}°C")
+            
+            with col3:
+                locations_count = df['location'].nunique()
+                st.metric("📍 Ubicaciones", locations_count)
+            
+            with col4:
+                sensors_count = df['sensor_id'].nunique()
+                st.metric("🔧 Sensores", sensors_count)
+            
+            # Mostrar últimas lecturas
+            st.subheader("📋 Últimas Lecturas")
+            display_df = df.head(10)[['timestamp', 'location', 'sensor_id', 'temperature_c', 'humidity']].copy()
+            display_df['timestamp'] = pd.to_datetime(display_df['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
+            display_df['temperature_c'] = display_df['temperature_c'].round(1)
+            
+            st.dataframe(display_df, use_container_width=True)
+            
         else:
-            st.warning("No hay datos en Supabase. Agrega algunos datos desde la aplicación.")
+            st.warning("No hay datos en Supabase. Usa el simulador para agregar datos de prueba.")
             show_demo_interface()
             
     except Exception as e:
         st.error(f"Error obteniendo datos: {e}")
-        show_demo_interface()
 
 def show_demo_interface():
     """Mostrar interfaz de demostración"""
     st.warning("📊 Modo Demostración - Usando datos de ejemplo")
     
-    # Datos de ejemplo
+    # Datos de ejemplo mejorados
     dates = [datetime.now() - timedelta(hours=i) for i in range(24)]
     sample_data = {
         'timestamp': dates,
@@ -113,7 +143,7 @@ def show_demo_interface():
     
     df = pd.DataFrame(sample_data)
     
-    # Métricas
+    # Métricas de ejemplo
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("🌡️ Temperatura Actual", "23.5°C", "0.5°C")
@@ -122,7 +152,7 @@ def show_demo_interface():
     with col3:
         st.metric("📍 Ubicaciones", "3 sensores")
     
-    # Gráficos
+    # Gráficos de ejemplo
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("📈 Temperatura por Ubicación")
@@ -132,19 +162,6 @@ def show_demo_interface():
     with col2:
         st.subheader("📊 Evolución Temporal")
         st.line_chart(df.set_index('timestamp')['temperature_c'])
-    
-    # Formulario de ejemplo
-    st.subheader("➕ Agregar Nueva Lectura (Demo)")
-    with st.form("demo_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            location = st.selectbox("Ubicación", ["Sala Principal", "Cocina", "Dormitorio"])
-            temp = st.slider("Temperatura (°C)", 15.0, 35.0, 23.0)
-        with col2:
-            humidity = st.slider("Humedad (%)", 30, 80, 50)
-            
-        if st.form_submit_button("📊 Simular Lectura"):
-            st.success(f"✅ Lectura simulada: {temp}°C en {location}")
 
 if __name__ == "__main__":
     main()
