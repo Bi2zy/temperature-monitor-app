@@ -2,7 +2,9 @@
 Utilidades específicas para el sistema de monitoreo de temperatura
 """
 from datetime import datetime
-from typing import Union
+from typing import Union, Optional
+import io
+import pandas as pd
 
 def validate_temperature(temperature: float) -> bool:
     """
@@ -100,3 +102,44 @@ def calculate_heat_index(temperature: float, humidity: float) -> float:
            (8.5282 * 10**-4 * temp_f * humidity**2) - (1.99 * 10**-6 * temp_f**2 * humidity**2)
     
     return fahrenheit_to_celsius(hi_f)
+
+
+def to_csv_bytes(df: pd.DataFrame, expected_columns: Optional[list] = None) -> bytes:
+    """
+    Convertir un DataFrame a bytes CSV (UTF-8) listos para descarga.
+
+    - Si `expected_columns` se proporciona, verificará que las columnas estén presentes
+      y lanzará ValueError si falta alguna.
+    - Convierte valores datetime a ISO strings para garantizar serialización.
+    - Si el DataFrame está vacío, devolverá un CSV con solo cabeceras.
+
+    Args:
+        df: DataFrame a exportar.
+        expected_columns: Lista opcional de columnas esperadas.
+
+    Returns:
+        Bytes en codificación utf-8 del CSV generado.
+    """
+    if expected_columns:
+        missing = [c for c in expected_columns if c not in df.columns]
+        if missing:
+            raise ValueError(f"Missing expected columns: {missing}")
+
+    # Hacemos una copia para no mutar el original
+    df_copy = df.copy()
+
+    # Convertir columnas datetime a ISO strings para evitar problemas de serialización
+    for col in df_copy.columns:
+        try:
+            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                df_copy[col] = df_copy[col].dt.tz_convert(None).dt.strftime("%Y-%m-%dT%H:%M:%S")
+            else:
+                # Intentar convertir objetos que puedan ser datetimes
+                df_copy[col] = df_copy[col].apply(lambda x: x.isoformat() if hasattr(x, 'isoformat') else x)
+        except Exception:
+            # Si falla la conversión, la dejamos tal cual
+            pass
+
+    buffer = io.StringIO()
+    df_copy.to_csv(buffer, index=False)
+    return buffer.getvalue().encode("utf-8")
