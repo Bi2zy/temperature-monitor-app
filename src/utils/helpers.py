@@ -4,7 +4,6 @@ Utilidades específicas para el sistema de monitoreo de temperatura
 
 import io
 from datetime import datetime
-from typing import Optional, List
 
 import pandas as pd
 
@@ -119,7 +118,7 @@ def calculate_heat_index(temperature: float, humidity: float) -> float:
     return fahrenheit_to_celsius(hi_f)
 
 
-def to_csv_bytes(df: pd.DataFrame, expected_columns: Optional[List] = None) -> bytes:
+def to_csv_bytes(df: pd.DataFrame, expected_columns: list | None = None) -> bytes:
     """
     Convertir un DataFrame a bytes CSV (UTF-8) listos para descarga.
 
