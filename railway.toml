@@ -7,4 +7,4 @@ startCommand = "streamlit run src/app.py --server.port=$PORT"
 [[services]]
 name = "web"
 [[services.ports]]
-port = 8080
+port = 8180
